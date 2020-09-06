@@ -453,7 +453,7 @@ end)
 
 localplayer.CharacterAdded:Connect(function(character)
     print("respawned")
-    localHumanoid = character:WaitForChild("Humanoid")
+   -- localHumanoid = character:WaitForChild("Humanoid")
     
     booltable = {}
     cdTable = {}
