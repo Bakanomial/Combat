@@ -1,0 +1,516 @@
+-- test script 
+
+assert(Drawing, "Your exploit needs to have a Drawing API")
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local http = game:GetService("HttpService")
+local workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local Live = workspace:WaitForChild("Live")
+
+local localplayer = Players.LocalPlayer
+local localHumanoid;
+pcall(function()
+    localHumanoid = localplayer.Character.Humanoid
+end)
+local mouse = localplayer:GetMouse()
+local playerGui = localplayer:WaitForChild("PlayerGui")
+local backpackGui = playerGui:WaitForChild("BackpackGui")
+local playerBackpack = localplayer:WaitForChild("Backpack")
+local Hotbar = backpackGui:WaitForChild("MainFrame")
+
+local CDColor = Color3.fromRGB(200,0,0)
+local OriginalColor = Color3.fromRGB(245, 197, 130)
+local lastequipped = nil;
+
+local CurrentList = {}
+local cdTable = {}
+local booltable = {}
+
+local isShinobi = playerBackpack:FindFirstChild("Grapple") or localplayer.Character:FindFirstChild("Grapple")
+
+local weaponCooldowns = {
+    Grapple = 7;
+    ["Shadow Rush"] = 8;
+    ["Owl Slash"] = 10;
+    Lethality = 30.7;
+    ["Shadow Fan"] = 10.5;
+    ["Triple Dagger Throw"] = 10.7;
+    Bane = 45.5;
+    Agility = 40.3;
+    ["Ethereal Strike"] = 15.5;
+}
+
+
+local Settings = {
+    
+    Toggles = {
+        UIBool = true;
+        ChatLogs = true;
+        ManabarOverlay = true;
+        maxUIdistance = 150000;
+        maxESPDistance = 10000;
+    };
+    
+    Keybinds = {
+        UIToggle = Enum.KeyCode.F1;
+        ChatToggle = Enum.KeyCode.C;
+        InstantLog = Enum.KeyCode.F2;
+        Respawn =  Enum.KeyCode.F3;
+    };
+}
+
+local saveExist;
+local s,e = pcall(function()
+    saveExist = http:JSONDecode(loadfile("GohansCombat_KeybindConfig.json"))
+end)
+
+if s then
+    Settings = saveExist
+end
+
+local Keybinds = saveExist or DefaultKeybinds
+
+local charset = {}
+
+for i = 48,  57 do table.insert(charset, string.char(i)) end
+for i = 65,  90 do table.insert(charset, string.char(i)) end
+for i = 97, 122 do table.insert(charset, string.char(i)) end
+
+function RandomCharacters(length)
+    return length > 0 and RandomCharacters(length - 1) .. charset[Random.new():NextInteger(1, #charset)] or ""
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+syn.protect_gui(ScreenGui)
+ScreenGui.Name = RandomCharacters(Random.new():NextInteger(5,20))
+ScreenGui.Parent = CoreGui
+
+local Folder = Instance.new("Folder")
+Folder.Name = "Players"
+Folder.Parent = ScreenGui
+
+local function checkIfExists(nk)
+    for i,v in pairs(Settings.Keybinds) do
+        if nk == v then
+            return true
+        end
+    end
+    
+    return false
+ end
+
+local function saveKeybinds(change,newkeybind)
+    if Keybinds[change] then
+        if checkIfExists(newkeybind) then return end
+        
+        Settings.Keybinds[change] = newkeybind
+        
+        wait(1)
+        
+        writefile("GohansCombat_KeybindConfig.json", http:JSONEncode(Settings))
+    end
+end
+
+local function ToggleUI(bool)
+    ScreenGui.Enabled = bool
+    for i,v in ipairs(Folder:GetChildren()) do
+        v.Enabled = bool
+    end
+end
+
+local function createCDUI(name)
+    local framename;
+    for i,v in ipairs(Hotbar:GetChildren()) do
+        if name == string.sub(v.Name,2) then
+            framename = v.Name
+        end
+    end
+    
+    local frame = Hotbar:FindFirstChild(framename)
+    local overlay = frame:FindFirstChild("Overlay")
+    overlay.ImageColor3 = CDColor
+    
+    local f = Instance.new("Frame")
+    f.AnchorPoint = Vector2.new(.5,1)
+    f.BackgroundColor3 = CDColor
+    f.BackgroundTransparency = .5
+    f.BorderSizePixel = 0
+    f.Position = UDim2.new(0.5,0,1,0)
+    f.Size = UDim2.new(1,-6,.97,0)
+    f.Parent = overlay
+    
+    cdTable[name] = {WeaponName = name, Name = framename, cd = tick()}
+end
+
+
+local function bindSignals(player,character)
+    if not character then return end
+    
+    local Humanoid = character:WaitForChild("Humanoid")
+    local root = character:WaitForChild("HumanoidRootPart")
+    local Head = character:WaitForChild("Head")
+    
+    local ManaValue = character:WaitForChild("Mana")
+    local StomachValue = character:WaitForChild("Stomach")
+    local ToxicityValue = character:WaitForChild("Toxicity")
+    local TemperatureValue = character:WaitForChild("Temperature")
+    
+    local playerUI = Folder:WaitForChild(player.Name,50)
+    
+    if not playerUI then return end
+    
+    Humanoid.Changed:Connect(function(prop)
+        if prop == "Health" or prop == "MaxHealth" then
+            local percent = Humanoid.Health/Humanoid.MaxHealth
+            playerUI.Health.Update.Size = UDim2.new(percent,0,1,0)
+            playerUI.Health.Label.Text = "["..math.floor(Humanoid.Health).."/"..math.floor(Humanoid.MaxHealth).."] "..math.floor(percent*100) .."%"
+        end
+    end)
+    
+    ManaValue.Changed:Connect(function(prop)
+        local percent = ManaValue.Value/100
+        playerUI.Mana.Update.Size = UDim2.new(1,0,percent,0)
+    end)
+    
+    StomachValue.Changed:Connect(function(prop)
+        if StomachValue.Value < 1000 and StomachValue.Value > CurrentList[player].MaxValues.Stomach then
+            CurrentList[player].MaxValues.Stomach = StomachValue.Value
+        end
+        local percent = StomachValue.Value/CurrentList[player].MaxValues.Stomach
+        playerUI.Stomach.Update.Size = UDim2.new(percent,0,1,0)
+    end)
+    
+    ToxicityValue.Changed:Connect(function(prop)
+        if  ToxicityValue.Value > CurrentList[player].MaxValues.Toxicity then
+            CurrentList[player].MaxValues.Toxicity = ToxicityValue.Value
+        end
+        local percent = ToxicityValue.Value/CurrentList[player].MaxValues.Toxicity
+        playerUI.Toxicity.Update.Size = UDim2.new(percent,0,1,0)
+    end)
+    
+    TemperatureValue.Changed:Connect(function()
+        local hp;
+    	local cp;
+    	if TemperatureValue.Value > 0 then
+    		cp = (1-math.abs(TemperatureValue.Value))/2
+    		hp = 1-cp
+    	elseif TemperatureValue.Value < 0 then
+    		hp = (1-math.abs(TemperatureValue.Value))/2
+    		cp = 1-hp
+    	else
+    		hp = .5
+    		cp = .5
+    	end
+        playerUI.Temperature.Heat.Size = UDim2.new(hp,0,1,0)
+        playerUI.Temperature.Cold.Size = UDim2.new(cp,0,1,0)
+    end)
+    
+    ToxicityValue.Value = ToxicityValue.Value - .001
+    StomachValue.Value = StomachValue.Value - .001
+    ManaValue.Value = ManaValue.Value - .001
+    
+    local percent = Humanoid.Health/Humanoid.MaxHealth
+    playerUI.Health.Update.Size = UDim2.new(percent,0,1,0)
+    playerUI.Health.Label.Text = "["..math.floor(Humanoid.Health).."/"..math.floor(Humanoid.MaxHealth).."] "..math.floor(percent*100) .."%"
+    
+    playerUI.Adornee = root
+end
+
+local function createBUI(player)
+    local BI = Instance.new("BillboardGui")
+    BI.Name = player.Name
+    BI.Size = UDim2.new(15,0,15,0)
+    BI.ClipsDescendants = false
+    BI.AlwaysOnTop = true
+    BI.MaxDistance = Settings.Toggles.maxUIdistance
+    BI.StudsOffset = Vector3.new(0,-.5,0)
+    BI.LightInfluence = 0
+    BI.Parent = Folder
+    
+    local F1 = Instance.new("Frame")
+    F1.Name = "Mana"
+    F1.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    F1.BackgroundTransparency = .5
+    --F1.BorderSizePixel = 0
+    F1.Position = UDim2.new(-0.06, 0,0.12, 0)
+    F1.Size = UDim2.new(0.1, 0,0.8, 0)
+    F1.Parent = BI
+    
+    local F15 = Instance.new("Frame")
+    F15.Name = "Update"
+    F15.AnchorPoint = Vector2.new(0,1)
+    F15.BackgroundTransparency = .2
+    F15.BackgroundColor3 = Color3.fromRGB(219, 174, 255)
+    F15.Position = UDim2.new(0,0,1,0)
+    F15.BorderSizePixel = 0
+    F15.Size = UDim2.new(1, 0,0, 0)
+    F15.Parent = F1
+    
+    local F2 = Instance.new("Frame")
+    F2.Name = "Health"
+    F2.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    F2.AnchorPoint = Vector2.new(1,0)
+    F2.BackgroundTransparency = .5
+   -- F2.BorderSizePixel = 1
+    F2.Position = UDim2.new(1, 0,0, 0)
+    F2.Size = UDim2.new(1, 0,0.1, 0)
+    F2.Parent = BI
+    
+    local F25 = Instance.new("Frame")
+    F25.Name = "Update"
+    F25.BackgroundColor3 = Color3.fromRGB(206, 39, 24)
+    F25.Size = UDim2.new(1, 0, 1, 0)
+    F25.BorderSizePixel = 0
+    F25.Parent = F2
+    
+    local F3 = Instance.new("Frame")
+    F3.Name = "Stomach"
+    F3.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    F3.AnchorPoint = Vector2.new(1,0)
+    --F3.BorderSizePixel = 1
+    F3.BackgroundTransparency = .5
+    F3.Position = UDim2.new(0.65, 0,0.12, 0)
+    F3.Size = UDim2.new(0.6, 0,0.03, 0)
+    F3.Parent = BI
+    
+    local F35 = Instance.new("Frame")
+    F35.Name = "Update"
+    F35.BackgroundColor3 = Color3.fromRGB(245, 205, 48)
+    F35.Size = UDim2.new(1, 0,1, 0)
+    F35.BorderSizePixel = 0
+    F35.Parent = F3
+    
+    local F4 = Instance.new("Frame")
+    F4.Name = "Toxicity"
+    F4.AnchorPoint = Vector2.new(1,0)
+    F4.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    --F4.BorderSizePixel = 0
+    F4.BackgroundTransparency = .5
+    F4.Position = UDim2.new(0.65, 0,0.16, 0)
+    F4.Size = UDim2.new(0.6, 0,0.03, 0)
+    F4.Parent = BI
+    
+    local F45 = Instance.new("Frame")
+    F45.Name = "Update"
+    F45.BackgroundColor3 = Color3.fromRGB(91, 154, 76)
+    F45.Size = UDim2.new(0, 0,1, 0)
+    F45.BorderSizePixel = 0
+    F45.Parent = F4
+    
+    local T1 = Instance.new("TextLabel")
+    T1.Name = "Label"
+    T1.BackgroundTransparency = 1
+    T1.Size = UDim2.new(1,0,1,0)
+    T1.Font = "SourceSansBold"
+    T1.TextScaled = true
+    T1.TextColor3 = Color3.fromRGB(255,255,255)
+    T1.Text = "LOADING"
+    T1.Parent = F2
+    
+    local F5 = Instance.new("Frame")
+    F5.Name = "Temperature"
+    F5.AnchorPoint = Vector2.new(1,0)
+    F5.Position = UDim2.new(0.9, 0,0.12, 0)
+    F5.Size = UDim2.new(0.18, 0,0.03, 0)
+    F5.Parent = BI
+    
+    local F51 = Instance.new("Frame")
+    F51.Name = "Heat"
+    F51.AnchorPoint = Vector2.new(1,0)
+    F51.BackgroundColor3 = Color3.fromRGB(177, 46, 20)
+    F51.Position = UDim2.new(1,0,0,0)
+    F51.Size = UDim2.new(.5,0,1,0)
+    F51.Parent = F5
+    
+    local F51 = Instance.new("Frame")
+    F51.Name = "Cold"
+    F51.BackgroundColor3 = Color3.fromRGB(18, 100, 200)
+    F51.Size = UDim2.new(.5,0,1,0)
+    F51.Parent = F5
+end
+
+local function updatePlayers()
+    for i,v in ipairs(Live:GetChildren()) do
+        local player = Players:GetCharacterFromPlayer(v) 
+        if player and player ~= localplayer then
+            if CurrentList[player] then
+                local ScreenPositionUpper = Camera:WorldToViewportPoint(Head.CFrame * CFrame.new(0, Head.Size.Y, 0).p)
+                
+            end
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if player == localplayer then return end
+    
+    if not CurrentList[player] then
+        createBUI(player)
+       CurrentList[player] = {
+           
+           --CurrentTool = nil;
+           
+           MaxValues = {
+               Stomach = 125;
+               Toxicity = 100
+           };
+           
+       
+       };
+   
+        player.CharacterAdded:Connect(function(character)
+            bindSignals(player,character)
+        end)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if CurrentList[player] then
+        CurrentList[player] = nil;
+        local f = Folder:FindFirstChild(player.Name)
+        if f then
+            f:Destroy()
+        end
+    end
+end)
+
+UIS.InputBegan:Connect(function(inputObj, gamep)
+    if gamep then return end
+    
+    if inputObj.KeyCode == Settings.Keybinds.UIToggle then
+        Settings.Toggles.UIBool = not Settings.Toggles.UIBool
+        ToggleUI(Settings.Toggles.UIBool)
+    elseif inputObj.KeyCode == Settings.Keybinds.Respawn then
+        print("respawn")
+    elseif inputObj.KeyCode == Settings.Keybinds.InstantLog then
+        print("instalog")
+    elseif inputObj.KeyCode == Settings.Keybinds.ChatToggle then
+        print("chatlogs on!")
+    end
+end)
+
+for i,v in ipairs(Players:GetPlayers()) do
+    if v ~= localplayer then
+    
+        if not CurrentList[v] then
+            createBUI(v)
+           CurrentList[v] = {
+               
+               --CurrentTool = nil;
+               
+               MaxValues = {
+                   Stomach = 125;
+                   Toxicity = 100
+               };
+               
+           
+           };
+       
+            v.CharacterAdded:Connect(function(character)
+                bindSignals(v,character)
+            end)
+            
+            bindSignals(v,v.Character)
+        end
+    end
+end
+
+local lastanim;
+
+local function childadded(obj)
+    if obj:IsA("Tool") then
+        lastequipped = obj
+       -- lastanim = obj:FindFirstChildOfClass("Animation")
+    end
+end
+--[[
+local function findanim(yes)
+    local track = localHumanoid.Animator:GetPlayingAnimationTracks()
+    for i,v in ipairs(track) do
+        print(yes, v.Animation.Name)
+        if v.Animation == yes then
+            print("?")
+            return true
+        end
+    end
+    return false
+end
+]]
+mouse.Button1Down:Connect(function()
+    print("fired", booltable[lastequipped.Name] , weaponCooldowns[lastequipped.Name] ,  cdTable[lastequipped.Name])
+    if not booltable[lastequipped.Name] and weaponCooldowns[lastequipped.Name] and not cdTable[lastequipped.Name] --[[and findanim(lastanim)]] then
+        local oldname = lastequipped.Name
+        booltable[oldname] = true
+        createCDUI(lastequipped.Name)
+        wait(.1)
+        booltable[oldname] = false
+    end
+end)
+
+localplayer.CharacterAdded:Connect(function(character)
+    print("respawned")
+    localHumanoid = character:WaitForChild("Humanoid")
+    
+    booltable = {}
+    cdTable = {}
+    
+    character.ChildAdded:Connect(childadded)
+    character.ChildRemoved:Connect(function(obj)
+        if obj:IsA("Tool") then
+            print(obj.Name.." was removed.")
+            lastequipped = nil;
+        end
+    end)
+end)
+
+localplayer.Character.ChildAdded:Connect(childadded)
+localplayer.Character.ChildRemoved:Connect(function(obj)
+    if obj:IsA("Tool") then
+        print(obj.Name.." was removed.")
+        lastequipped = nil;
+    end
+end)
+
+
+playerBackpack.ChildRemoved:Connect(function(obj)
+    if not localplayer.Character then return end
+    
+    
+    if obj:IsA("Tool") and obj.Name == "Dagger" then
+        if localplayer.Character:FindFirstChild("Dagger") then return end
+        booltable = {}
+        cdTable = {}
+    end
+end)
+
+RunService:BindToRenderStep("Test",Enum.RenderPriority.First.Value, function()
+    if not localplayer or not localplayer.Character then return end
+    
+    for i,v in pairs(cdTable) do
+        if v then
+            local f = Hotbar:FindFirstChild(v.Name)
+            if f then
+                if (tick() - v.cd) >= (weaponCooldowns[v.WeaponName]) then
+                    cdTable[i] = nil;
+                    pcall(function()
+                        f.Overlay.Frame:Destroy()
+                        f.Overlay.ImageColor3 = OriginalColor
+                    end)
+                else
+                    local frame = f.Overlay:FindFirstChild('Frame')
+                    if frame then
+                        --print(1-math.clamp((tick()-v.cd)/weaponCooldowns[v.WeaponName],0,1))
+                        frame.Size = UDim2.new(1,-6,.97 - math.clamp((tick()-v.cd)/weaponCooldowns[v.WeaponName],0,.97),0)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+
+
