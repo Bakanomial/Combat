@@ -33,7 +33,7 @@ local booltable = {}
 local isShinobi = playerBackpack:FindFirstChild("Grapple") or localplayer.Character:FindFirstChild("Grapple")
 
 local weaponCooldowns = {
-    Grapple = 7;
+    Grapple = 7.1;
     ["Shadow Rush"] = 8;
     ["Owl Slash"] = 10.25;
     Lethality = 30.7;
