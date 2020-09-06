@@ -34,7 +34,7 @@ local isShinobi = playerBackpack:FindFirstChild("Grapple") or localplayer.Charac
 
 local weaponCooldowns = {
     Grapple = 7.1;
-    ["Shadow Rush"] = 8;
+    ["ShadowRush"] = 8;
     ["Owl Slash"] = 10.25;
     Lethality = 30.7;
     ["Shadow Fan"] = 10.5;
