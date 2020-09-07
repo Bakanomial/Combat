@@ -39,8 +39,8 @@ local weaponCooldowns = {
     Lethality = 30.7;
     ["Shadow Fan"] = 10.5;
     ["Triple Dagger Throw"] = 10.7;
-    Bane = isShinobi and 35.5 or 45.5;
-    Agility = 40.3;
+    Bane = isShinobi and 35.6 or 45.6;
+    Agility = 40.4;
     ["Ethereal Strike"] = 15.5;
 }
 
