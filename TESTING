@@ -139,7 +139,7 @@ local function createCDUI(name)
     f.BackgroundColor3 = CDColor
     f.BackgroundTransparency = .5
     f.BorderSizePixel = 0
-    f.Position = UDim2.new(0.5,0,1.03,0)
+    f.Position = UDim2.new(0.5,0,.97,0)
     f.Size = UDim2.new(1,-6,.97,0)
     f.Parent = overlay
     
